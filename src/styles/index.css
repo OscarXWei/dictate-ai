@@ -1,0 +1,125 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans:
+    "SF Pro Text", -apple-system, BlinkMacSystemFont, "Helvetica Neue",
+    "Segoe UI", Roboto, sans-serif;
+  --font-mono:
+    "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Monaco, Consolas,
+    monospace;
+
+  --color-glass-bg: oklch(0.98 0.01 250 / 0.55);
+  --color-glass-border: oklch(1 0 0 / 0.25);
+  --color-text-dim: oklch(0.55 0.02 250 / 0.45);
+  --color-text-correct: oklch(0.25 0.02 250);
+  --color-text-error: oklch(0.55 0.18 25);
+  --color-cursor: oklch(0.65 0.2 40);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: transparent;
+  font-family: var(--font-sans);
+  color: var(--color-text-correct);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+  cursor: default;
+}
+
+/* Soft gradient wash on top of the macOS vibrancy layer */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      120% 80% at 50% 0%,
+      oklch(0.97 0.025 250 / 0.55),
+      transparent 60%
+    ),
+    radial-gradient(
+      80% 60% at 80% 100%,
+      oklch(0.95 0.04 280 / 0.4),
+      transparent 70%
+    );
+  z-index: -1;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-glass-bg: oklch(0.22 0.01 250 / 0.45);
+    --color-glass-border: oklch(1 0 0 / 0.1);
+    --color-text-dim: oklch(0.65 0.02 250 / 0.35);
+    --color-text-correct: oklch(0.95 0.01 250);
+    --color-text-error: oklch(0.7 0.2 25);
+    --color-cursor: oklch(0.75 0.22 40);
+  }
+}
+
+/* Soft bottom fade for the typing area, matching the ProTypist reference.
+   Skipped when the content is very short so single-line text isn't clipped. */
+.dt-textmask {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    black 0%,
+    black 85%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    black 0%,
+    black 85%,
+    transparent 100%
+  );
+}
+
+/* TypingArea — character spans */
+.dt-char {
+  color: var(--color-text-dim);
+  transition: color 80ms ease-out;
+}
+.dt-char[data-status="correct"] {
+  color: var(--color-text-correct);
+}
+.dt-char[data-status="incorrect"] {
+  color: var(--color-text-error);
+  text-decoration: underline;
+  text-decoration-color: var(--color-text-error);
+  text-decoration-thickness: 1.5px;
+}
+.dt-char[data-space="1"][data-status="incorrect"] {
+  background-color: color-mix(in oklch, var(--color-text-error) 25%, transparent);
+  text-decoration: none;
+  border-radius: 2px;
+}
+
+/* Cursor — absolutely positioned, glides smoothly */
+.dt-cursor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2px;
+  background: var(--color-cursor);
+  border-radius: 2px;
+  pointer-events: none;
+  transition:
+    transform 90ms cubic-bezier(0.4, 0, 0.2, 1),
+    height 90ms cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow:
+    0 0 6px var(--color-cursor),
+    0 0 14px color-mix(in oklch, var(--color-cursor) 50%, transparent);
+  animation: dt-cursor-pulse 1.4s ease-in-out infinite;
+}
+@keyframes dt-cursor-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.dt-cursor[data-typing="1"] {
+  animation: none;
+  opacity: 1;
+}
