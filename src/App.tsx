@@ -37,6 +37,7 @@ function App() {
     persisted.dictationMode,
   );
   const [rate, setRate] = useState<number>(persisted.rate);
+  const [blind, setBlind] = useState<boolean>(persisted.blind);
   const [restartNonce, setRestartNonce] = useState(0);
   const [segmentNonce, setSegmentNonce] = useState(0);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -80,8 +81,8 @@ function App() {
 
   // Persist position whenever it changes.
   useEffect(() => {
-    savePosition({ trackId, segmentIndex, mode, dictationMode, rate });
-  }, [trackId, segmentIndex, mode, dictationMode, rate]);
+    savePosition({ trackId, segmentIndex, mode, dictationMode, rate, blind });
+  }, [trackId, segmentIndex, mode, dictationMode, rate, blind]);
 
   const next = useCallback(() => {
     stop();
@@ -178,6 +179,7 @@ function App() {
             <TypingArea
               engine={engine}
               scroll={dictationMode === "passage"}
+              blind={blind}
               onComplete={() => window.setTimeout(next, 700)}
             />
           </div>
@@ -196,9 +198,11 @@ function App() {
             mode={mode}
             dictationMode={dictationMode}
             rate={rate}
+            blind={blind}
             onChangeMode={setMode}
             onChangeDictationMode={setDictationMode}
             onChangeRate={setRate}
+            onToggleBlind={() => setBlind((b) => !b)}
             onRestart={restart}
             onNext={next}
             onReplay={replayAudio}

@@ -36,12 +36,14 @@ export function loadPosition(): PersistedPosition {
     const dictationMode: DictationMode = dictRaw === "passage" ? "passage" : "sentence";
     const rateRaw = Number(localStorage.getItem(KEY_RATE) ?? "1");
     const rate = RATES.includes(rateRaw) ? rateRaw : 1;
+    const blind = localStorage.getItem(KEY_BLIND) === "1";
     return {
       trackId,
       segmentIndex: Number.isFinite(segmentIndex) ? Math.max(0, segmentIndex) : 0,
       mode,
       dictationMode,
       rate,
+      blind,
     };
   } catch {
     return {
@@ -50,6 +52,7 @@ export function loadPosition(): PersistedPosition {
       mode: "strict",
       dictationMode: "sentence",
       rate: 1,
+      blind: false,
     };
   }
 }
@@ -64,6 +67,8 @@ export function savePosition(p: Partial<PersistedPosition>) {
     if (p.dictationMode !== undefined)
       localStorage.setItem(KEY_DICTATION, p.dictationMode);
     if (p.rate !== undefined) localStorage.setItem(KEY_RATE, String(p.rate));
+    if (p.blind !== undefined)
+      localStorage.setItem(KEY_BLIND, p.blind ? "1" : "0");
   } catch {
     // localStorage may throw in private mode or when full. Ignore.
   }

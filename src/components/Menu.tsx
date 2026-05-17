@@ -6,9 +6,11 @@ type Props = {
   mode: TypingMode;
   dictationMode: DictationMode;
   rate: number;
+  blind: boolean;
   onChangeMode: (m: TypingMode) => void;
   onChangeDictationMode: (d: DictationMode) => void;
   onChangeRate: (r: number) => void;
+  onToggleBlind: () => void;
   onRestart: () => void;
   onNext: () => void;
   onReplay: () => void;
@@ -22,9 +24,11 @@ export function Menu({
   mode,
   dictationMode,
   rate,
+  blind,
   onChangeMode,
   onChangeDictationMode,
   onChangeRate,
+  onToggleBlind,
   onRestart,
   onNext,
   onReplay,
@@ -119,6 +123,15 @@ export function Menu({
             label="Lenient"
             description="type through errors"
             onClick={() => onChangeMode("lenient")}
+          />
+
+          <Separator />
+          <SectionLabel>Practice</SectionLabel>
+          <ModeRow
+            active={blind}
+            label="默写 — hide text"
+            description="letters revealed as you type"
+            onClick={onToggleBlind}
           />
 
           <Separator />

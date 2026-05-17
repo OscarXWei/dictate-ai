@@ -92,6 +92,11 @@ body::before {
   text-decoration-color: var(--color-text-error);
   text-decoration-thickness: 1.5px;
 }
+/* 默写模式 — letters render as soft underscores until typed */
+.dt-char[data-blind="1"][data-status="untyped"] {
+  color: var(--color-text-dim);
+  opacity: 0.4;
+}
 .dt-char[data-space="1"][data-status="incorrect"] {
   background-color: color-mix(in oklch, var(--color-text-error) 25%, transparent);
   text-decoration: none;

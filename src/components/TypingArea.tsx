@@ -6,8 +6,14 @@ type Props = {
   /** When true (passage mode), cap the height and auto-scroll the cursor
    *  into view as it advances. Default false (sentence mode). */
   scroll?: boolean;
+  /** 默写模式 — hide letters & digits behind underscores until typed
+   *  correctly. Spaces and punctuation stay visible as a skeleton. */
+  blind?: boolean;
   onComplete?: () => void;
 };
+
+/** Chars that stay visible in blind mode (spaces, punctuation, etc.). */
+const ALWAYS_VISIBLE = /[^A-Za-z0-9]/;
 
 /**
  * Renders the target text as one <span> per character, with an absolutely
@@ -16,7 +22,7 @@ type Props = {
  * Updates happen via imperative DOM writes keyed on the index returned by the
  * engine — React doesn't re-render on keystrokes.
  */
-export function TypingArea({ engine, scroll = false, onComplete }: Props) {
+export function TypingArea({ engine, scroll = false, blind = false, onComplete }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cursorRef = useRef<HTMLSpanElement>(null);
   const charsRef = useRef<HTMLSpanElement[]>([]);
@@ -103,7 +109,18 @@ export function TypingArea({ engine, scroll = false, onComplete }: Props) {
 
       if (changedIdx >= 0) {
         const span = charsRef.current[changedIdx];
-        if (span) span.dataset.status = engine.statuses[changedIdx];
+        if (span) {
+          span.dataset.status = engine.statuses[changedIdx];
+          // In blind mode, reveal the true character on correct input;
+          // hide it again on backspace (status === "untyped").
+          if (blind) {
+            const ch = engine.target[changedIdx];
+            const visible =
+              engine.statuses[changedIdx] !== "untyped" ||
+              ALWAYS_VISIBLE.test(ch);
+            span.textContent = visible ? ch : "_";
+          }
+        }
       }
       moveCursor(engine.cursor);
 
@@ -144,19 +161,27 @@ export function TypingArea({ engine, scroll = false, onComplete }: Props) {
     i = j;
   }
 
-  const renderChar = (flat: number, ch: string, isSpace: boolean) => (
-    <span
-      key={flat}
-      ref={(el) => {
-        if (el) charsRef.current[flat] = el;
-      }}
-      className="dt-char"
-      data-status="untyped"
-      data-space={isSpace ? "1" : "0"}
-    >
-      {isSpace ? " " : ch}
-    </span>
-  );
+  const renderChar = (flat: number, ch: string, isSpace: boolean) => {
+    const display = isSpace
+      ? " "
+      : blind && !ALWAYS_VISIBLE.test(ch)
+        ? "_"
+        : ch;
+    return (
+      <span
+        key={flat}
+        ref={(el) => {
+          if (el) charsRef.current[flat] = el;
+        }}
+        className="dt-char"
+        data-status="untyped"
+        data-space={isSpace ? "1" : "0"}
+        data-blind={blind && !isSpace && !ALWAYS_VISIBLE.test(ch) ? "1" : "0"}
+      >
+        {display}
+      </span>
+    );
+  };
 
   return (
     <div
