@@ -1,15 +1,36 @@
 import { useEffect, useRef, useState } from "react";
 import type { TypingMode } from "../engine/typing";
+import type { DictationMode } from "../lib/persist";
 
 type Props = {
   mode: TypingMode;
+  dictationMode: DictationMode;
+  rate: number;
   onChangeMode: (m: TypingMode) => void;
+  onChangeDictationMode: (d: DictationMode) => void;
+  onChangeRate: (r: number) => void;
   onRestart: () => void;
   onNext: () => void;
   onReplay: () => void;
+  onOpenPicker: () => void;
+  onOpenHelp: () => void;
 };
 
-export function Menu({ mode, onChangeMode, onRestart, onNext, onReplay }: Props) {
+const RATES = [0.5, 0.75, 1, 1.25];
+
+export function Menu({
+  mode,
+  dictationMode,
+  rate,
+  onChangeMode,
+  onChangeDictationMode,
+  onChangeRate,
+  onRestart,
+  onNext,
+  onReplay,
+  onOpenPicker,
+  onOpenHelp,
+}: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -33,20 +54,60 @@ export function Menu({ mode, onChangeMode, onRestart, onNext, onReplay }: Props)
       </button>
 
       {open && (
-        <div className="absolute bottom-10 right-0 w-56 rounded-2xl border border-[var(--color-glass-border)] bg-[var(--color-glass-bg)] p-1.5 font-mono text-xs text-[var(--color-text-correct)] shadow-[0_12px_40px_rgba(0,0,0,0.18)] backdrop-blur-2xl backdrop-saturate-150">
+        <div className="absolute bottom-10 right-0 w-60 rounded-2xl border border-[var(--color-glass-border)] bg-[var(--color-glass-bg)] p-1.5 font-mono text-xs text-[var(--color-text-correct)] shadow-[0_12px_40px_rgba(0,0,0,0.18)] backdrop-blur-2xl backdrop-saturate-150">
+          <MenuItem
+            onClick={() => { onOpenPicker(); setOpen(false); }}
+            shortcut="⌘K"
+          >
+            Browse tracks
+          </MenuItem>
+          <Separator />
           <MenuItem onClick={() => { onReplay(); setOpen(false); }} shortcut="tab">
             Replay audio
           </MenuItem>
           <MenuItem onClick={() => { onRestart(); setOpen(false); }} shortcut="esc">
-            Restart segment
+            {dictationMode === "passage" ? "Restart passage" : "Restart segment"}
           </MenuItem>
           <MenuItem onClick={() => { onNext(); setOpen(false); }} shortcut="↵">
-            Skip to next
+            {dictationMode === "passage" ? "Next track" : "Skip to next"}
           </MenuItem>
+
           <Separator />
-          <div className="px-2.5 py-1.5 text-[10px] uppercase tracking-wider opacity-50">
-            Mode
+          <SectionLabel>Speed</SectionLabel>
+          <div className="flex gap-1 px-2 py-1">
+            {RATES.map((r) => (
+              <button
+                key={r}
+                onClick={() => onChangeRate(r)}
+                className={
+                  "flex-1 rounded-md py-1 text-[11px] tabular-nums transition-colors " +
+                  (r === rate
+                    ? "bg-[var(--color-cursor)]/30 text-[var(--color-text-correct)]"
+                    : "opacity-60 hover:bg-[var(--color-glass-border)]/50 hover:opacity-100")
+                }
+              >
+                {r}×
+              </button>
+            ))}
           </div>
+
+          <Separator />
+          <SectionLabel>Dictation</SectionLabel>
+          <ModeRow
+            active={dictationMode === "sentence"}
+            label="Sentence"
+            description="one at a time"
+            onClick={() => onChangeDictationMode("sentence")}
+          />
+          <ModeRow
+            active={dictationMode === "passage"}
+            label="Passage"
+            description="whole track, shadow"
+            onClick={() => onChangeDictationMode("passage")}
+          />
+
+          <Separator />
+          <SectionLabel>Typing</SectionLabel>
           <ModeRow
             active={mode === "strict"}
             label="Strict"
@@ -59,6 +120,14 @@ export function Menu({ mode, onChangeMode, onRestart, onNext, onReplay }: Props)
             description="type through errors"
             onClick={() => onChangeMode("lenient")}
           />
+
+          <Separator />
+          <MenuItem
+            onClick={() => { onOpenHelp(); setOpen(false); }}
+            shortcut="?"
+          >
+            Keyboard shortcuts
+          </MenuItem>
         </div>
       )}
     </div>
@@ -91,6 +160,14 @@ function MenuItem({
 
 function Separator() {
   return <div className="my-1 h-px bg-[var(--color-glass-border)]" />;
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="px-2.5 py-1.5 text-[10px] uppercase tracking-wider opacity-50">
+      {children}
+    </div>
+  );
 }
 
 function ModeRow({

@@ -12,7 +12,7 @@ type PlayOptions = {
  * Returned functions have stable identities (useCallback) so consumers can
  * pass them as effect deps without re-binding listeners on every render.
  */
-export function useAudioPlayer(src: string | null) {
+export function useAudioPlayer(src: string | null, rate: number = 1) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const stopTimerRef = useRef<number | null>(null);
   const pendingReadyRef = useRef<(() => void) | null>(null);
@@ -75,6 +75,12 @@ export function useAudioPlayer(src: string | null) {
     }
   }, [src]);
 
+  // Apply playback rate when it changes.
+  useEffect(() => {
+    const el = audioRef.current;
+    if (el) el.playbackRate = rate;
+  }, [rate]);
+
   const stop = useCallback(() => {
     clearStopTimer();
     clearPendingReady();
@@ -89,7 +95,9 @@ export function useAudioPlayer(src: string | null) {
       const leadIn = opts.leadInSec ?? 0;
       const tail = opts.tailSec ?? 0.15;
       const from = Math.max(0, startSec - leadIn);
-      const playDurationMs = Math.max(0, endSec - from + tail) * 1000;
+      // Slower playback ⇒ longer wall-clock time before auto-stop.
+      const playDurationMs =
+        (Math.max(0, endSec - from + tail) / Math.max(0.1, rate)) * 1000;
 
       clearStopTimer();
       clearPendingReady();
@@ -121,7 +129,7 @@ export function useAudioPlayer(src: string | null) {
       el.addEventListener("loadedmetadata", onReady);
       el.addEventListener("canplay", onReady);
     },
-    [src],
+    [src, rate],
   );
 
   const replay = useCallback(() => {

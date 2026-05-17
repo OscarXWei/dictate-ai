@@ -1,11 +1,20 @@
+import type { DictationMode } from "../lib/persist";
+
 type Props = {
   book: string;
   trackTitle: string;
   segmentIndex: number;
   segmentTotal: number;
+  dictationMode: DictationMode;
 };
 
-export function Header({ book, trackTitle, segmentIndex, segmentTotal }: Props) {
+export function Header({
+  book,
+  trackTitle,
+  segmentIndex,
+  segmentTotal,
+  dictationMode,
+}: Props) {
   return (
     <header
       data-tauri-drag-region
@@ -16,9 +25,13 @@ export function Header({ book, trackTitle, segmentIndex, segmentTotal }: Props) 
         <Dot />
         <span className="opacity-80">{trackTitle}</span>
         <Dot />
-        <span className="text-[var(--color-text-correct)] opacity-70">
-          {segmentIndex + 1} / {segmentTotal}
-        </span>
+        {dictationMode === "passage" ? (
+          <span className="text-[var(--color-cursor)] opacity-80">passage</span>
+        ) : (
+          <span className="text-[var(--color-text-correct)] opacity-70">
+            {segmentIndex + 1} / {segmentTotal}
+          </span>
+        )}
       </div>
     </header>
   );

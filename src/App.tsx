@@ -1,85 +1,152 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TypingEngine, type TypingMode } from "./engine/typing";
 import { TypingArea } from "./components/TypingArea";
 import { StatsPill } from "./components/StatsPill";
 import { Header } from "./components/Header";
 import { Menu } from "./components/Menu";
 import { AudioProgress } from "./components/AudioProgress";
+import { TrackPicker } from "./components/TrackPicker";
+import { HelpOverlay } from "./components/HelpOverlay";
 import { useAudioPlayer } from "./hooks/useAudioPlayer";
+import { audioUrl } from "./lib/audioUrl";
+import { loadPosition, savePosition, type DictationMode } from "./lib/persist";
+import manifestData from "./data/manifest.json";
+import type { Manifest } from "./data/types";
 
-// Phase-4/5 demo wiring. Phase 6 will replace this with the full
-// manifest-driven track picker.
-const DEMO = {
-  book: "Cambridge IELTS 17",
-  trackTitle: "Test 1 · Part 1",
-  audioFile: "C17-T1-P1.mp3",
-  segments: [
-    { startSec: 90.0, endSec: 90.68, text: "Hello." },
-    { startSec: 90.68, endSec: 91.66, text: "Oh hello." },
-    { startSec: 91.66, endSec: 92.65, text: "My name's Jan." },
-    {
-      startSec: 92.65,
-      endSec: 98.07,
-      text: "Are you the right person to talk to about the Buckworth Conservation Group?",
-    },
-    { startSec: 98.07, endSec: 99.39, text: "Yes, I'm Peter." },
-    { startSec: 99.39, endSec: 100.88, text: "I'm the Secretary." },
-    {
-      startSec: 101.54,
-      endSec: 106.36,
-      text: "I've just moved to this area and I'm interested in getting involved.",
-    },
-  ],
-};
+const manifest = manifestData as Manifest;
+const tracks = manifest.tracks;
 
 function App() {
-  const [index, setIndex] = useState(0);
-  const [mode, setMode] = useState<TypingMode>("strict");
+  const persisted = useRef(loadPosition()).current;
+
+  const [trackId, setTrackId] = useState<string>(() => {
+    if (persisted.trackId && tracks.some((t) => t.id === persisted.trackId)) {
+      return persisted.trackId;
+    }
+    return tracks[0]?.id ?? "";
+  });
+  const [segmentIndex, setSegmentIndex] = useState<number>(() => {
+    const t = tracks.find((tr) => tr.id === persisted.trackId);
+    if (t && persisted.segmentIndex < t.segments.length) {
+      return persisted.segmentIndex;
+    }
+    return 0;
+  });
+  const [mode, setMode] = useState<TypingMode>(persisted.mode);
+  const [dictationMode, setDictationMode] = useState<DictationMode>(
+    persisted.dictationMode,
+  );
+  const [rate, setRate] = useState<number>(persisted.rate);
   const [restartNonce, setRestartNonce] = useState(0);
   const [segmentNonce, setSegmentNonce] = useState(0);
-  const segment = DEMO.segments[index];
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
-  const engine = useMemo(
-    () => new TypingEngine(segment.text, mode),
-    [segment.text, mode, restartNonce],
+  const track = useMemo(
+    () => tracks.find((t) => t.id === trackId) ?? tracks[0],
+    [trackId],
+  );
+  const segment = track.segments[Math.min(segmentIndex, track.segments.length - 1)];
+
+  // Dictation-mode-dependent target text + audio range.
+  const target = useMemo(
+    () =>
+      dictationMode === "sentence"
+        ? segment.text
+        : track.segments.map((s) => s.text).join(" "),
+    [dictationMode, segment.text, track],
   );
 
-  const audioSrc = `/audio/${encodeURIComponent(DEMO.audioFile)}`;
-  const { playSegment, replay, stop, isPlaying } = useAudioPlayer(audioSrc);
+  const audioRange = useMemo(
+    () =>
+      dictationMode === "sentence"
+        ? { start: segment.startSec, end: segment.endSec }
+        : { start: 0, end: track.durationSec },
+    [dictationMode, segment.startSec, segment.endSec, track.durationSec],
+  );
+
+  const engine = useMemo(
+    () => new TypingEngine(target, mode),
+    [target, mode, restartNonce],
+  );
+
+  const audioSrc = useMemo(() => audioUrl(track.audioFile), [track.audioFile]);
+  const { playSegment, replay, stop, isPlaying } = useAudioPlayer(audioSrc, rate);
 
   const segmentDurationMs = Math.max(
     0,
-    (segment.endSec - segment.startSec + 0.15) * 1000,
+    (audioRange.end - audioRange.start + 0.15) * 1000,
   );
 
-  const next = () => {
+  // Persist position whenever it changes.
+  useEffect(() => {
+    savePosition({ trackId, segmentIndex, mode, dictationMode, rate });
+  }, [trackId, segmentIndex, mode, dictationMode, rate]);
+
+  const next = useCallback(() => {
     stop();
-    setIndex((i) => (i + 1) % DEMO.segments.length);
-  };
-  const restart = () => {
+    if (dictationMode === "passage") {
+      // Advance to next track in the manifest order.
+      const idx = tracks.findIndex((t) => t.id === trackId);
+      const nextTrack = tracks[Math.min(idx + 1, tracks.length - 1)];
+      setTrackId(nextTrack.id);
+      setSegmentIndex(0);
+      return;
+    }
+    setSegmentIndex((i) => Math.min(i + 1, track.segments.length - 1));
+  }, [stop, dictationMode, trackId, track.segments.length]);
+
+  const restart = useCallback(() => {
     stop();
+    if (dictationMode === "passage") {
+      // Restart entire passage.
+      setSegmentIndex(0);
+    }
     setRestartNonce((n) => n + 1);
-  };
-  const replayAudio = () => {
+  }, [stop, dictationMode]);
+
+  const replayAudio = useCallback(() => {
     replay();
     setSegmentNonce((n) => n + 1);
-  };
+  }, [replay]);
 
-  // Auto-play segment audio whenever it changes (next / restart).
-  const lastSegmentRef = useRef<typeof segment | null>(null);
+  const selectTrack = useCallback(
+    (id: string) => {
+      stop();
+      setTrackId(id);
+      setSegmentIndex(0);
+      setPickerOpen(false);
+    },
+    [stop],
+  );
+
+  // Auto-play audio whenever the target changes (segment / restart / track / mode swap).
+  const lastTargetRef = useRef<string | null>(null);
   useEffect(() => {
-    if (lastSegmentRef.current !== segment || restartNonce > 0) {
-      lastSegmentRef.current = segment;
-      playSegment(segment.startSec, segment.endSec);
+    if (lastTargetRef.current !== target || restartNonce > 0) {
+      lastTargetRef.current = target;
+      playSegment(audioRange.start, audioRange.end);
       setSegmentNonce((n) => n + 1);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [segment, restartNonce]);
+  }, [target, audioRange.start, audioRange.end, restartNonce]);
 
-  // Keyboard shortcuts: Tab (replay), Esc (restart), Enter (skip ahead).
+  // Global keyboard shortcuts.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        setPickerOpen((o) => !o);
+        return;
+      }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (pickerOpen) return;
+      if (helpOpen) return;
+      if (e.key === "?") {
+        e.preventDefault();
+        setHelpOpen(true);
+        return;
+      }
       if (e.key === "Tab") {
         e.preventDefault();
         replayAudio();
@@ -93,16 +160,16 @@ function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [replay]);
+  }, [pickerOpen, helpOpen, replayAudio, restart, next]);
 
   return (
     <main className="flex h-full flex-col">
       <Header
-        book={DEMO.book}
-        trackTitle={DEMO.trackTitle}
-        segmentIndex={index}
-        segmentTotal={DEMO.segments.length}
+        book={track.book}
+        trackTitle={track.title}
+        segmentIndex={segmentIndex}
+        segmentTotal={track.segments.length}
+        dictationMode={dictationMode}
       />
 
       <section className="flex flex-1 items-center justify-center px-[clamp(2rem,8vw,6rem)]">
@@ -110,6 +177,7 @@ function App() {
           <div className="dt-textmask">
             <TypingArea
               engine={engine}
+              scroll={dictationMode === "passage"}
               onComplete={() => window.setTimeout(next, 700)}
             />
           </div>
@@ -126,13 +194,29 @@ function App() {
         <div className="absolute bottom-10 right-6">
           <Menu
             mode={mode}
+            dictationMode={dictationMode}
+            rate={rate}
             onChangeMode={setMode}
+            onChangeDictationMode={setDictationMode}
+            onChangeRate={setRate}
             onRestart={restart}
             onNext={next}
             onReplay={replayAudio}
+            onOpenPicker={() => setPickerOpen(true)}
+            onOpenHelp={() => setHelpOpen(true)}
           />
         </div>
       </footer>
+
+      <TrackPicker
+        tracks={tracks}
+        open={pickerOpen}
+        currentTrackId={trackId}
+        onSelect={selectTrack}
+        onClose={() => setPickerOpen(false)}
+      />
+
+      <HelpOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
     </main>
   );
 }

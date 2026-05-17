@@ -27,7 +27,14 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$HOME/Downloads/ielts/**",
+          "$HOME/Library/Application Support/Dictate.ai/audio/**"
+        ]
+      }
     }
   },
   "bundle": {

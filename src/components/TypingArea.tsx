@@ -3,6 +3,9 @@ import type { TypingEngine } from "../engine/typing";
 
 type Props = {
   engine: TypingEngine;
+  /** When true (passage mode), cap the height and auto-scroll the cursor
+   *  into view as it advances. Default false (sentence mode). */
+  scroll?: boolean;
   onComplete?: () => void;
 };
 
@@ -13,7 +16,7 @@ type Props = {
  * Updates happen via imperative DOM writes keyed on the index returned by the
  * engine — React doesn't re-render on keystrokes.
  */
-export function TypingArea({ engine, onComplete }: Props) {
+export function TypingArea({ engine, scroll = false, onComplete }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cursorRef = useRef<HTMLSpanElement>(null);
   const charsRef = useRef<HTMLSpanElement[]>([]);
@@ -35,7 +38,13 @@ export function TypingArea({ engine, onComplete }: Props) {
     const cursor = cursorRef.current;
     if (!container || !cursor) return;
 
+    // We compute positions in *scroll space* (offsetParent-relative), not
+    // viewport-relative, so the cursor stays aligned with its target span
+    // when the container is scrolled.
     const cRect = container.getBoundingClientRect();
+    const scrollY = container.scrollTop;
+    const scrollX = container.scrollLeft;
+    let activeSpan: HTMLSpanElement | null = null;
     let left: number;
     let top: number;
     let height: number;
@@ -43,21 +52,28 @@ export function TypingArea({ engine, onComplete }: Props) {
     if (index < charsRef.current.length) {
       const span = charsRef.current[index];
       if (!span) return;
+      activeSpan = span;
       const r = span.getBoundingClientRect();
-      left = r.left - cRect.left;
-      top = r.top - cRect.top;
+      left = r.left - cRect.left + scrollX;
+      top = r.top - cRect.top + scrollY;
       height = r.height;
     } else {
       const last = charsRef.current[charsRef.current.length - 1];
       if (!last) return;
+      activeSpan = last;
       const r = last.getBoundingClientRect();
-      left = r.right - cRect.left;
-      top = r.top - cRect.top;
+      left = r.right - cRect.left + scrollX;
+      top = r.top - cRect.top + scrollY;
       height = r.height;
     }
 
     cursor.style.transform = `translate(${left}px, ${top}px)`;
     cursor.style.height = `${height}px`;
+
+    // Passage mode: keep the active char in view.
+    if (scroll && activeSpan) {
+      activeSpan.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
   };
 
   useEffect(() => {
@@ -145,7 +161,12 @@ export function TypingArea({ engine, onComplete }: Props) {
   return (
     <div
       ref={containerRef}
-      className="relative font-mono leading-[1.55] tracking-tight text-[var(--color-text-dim)]"
+      className={
+        "relative font-mono leading-[1.55] tracking-tight text-[var(--color-text-dim)]" +
+        (scroll
+          ? " max-h-[60vh] overflow-y-auto pr-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          : "")
+      }
       style={{ fontSize: "clamp(1.5rem, 3.2vw, 2.25rem)" }}
     >
       <span
