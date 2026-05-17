@@ -156,6 +156,18 @@ function App() {
         setPickerOpen((o) => !o);
         return;
       }
+      // Cmd/Ctrl+B toggles blind mode — works even mid-typing, and we
+      // intentionally check before the bare modifier-filter return so the
+      // shortcut isn't swallowed.
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        !e.altKey &&
+        (e.key === "b" || e.key === "B")
+      ) {
+        e.preventDefault();
+        setBlind((b) => !b);
+        return;
+      }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (pickerOpen) return;
       if (helpOpen) return;

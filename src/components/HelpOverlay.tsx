@@ -8,7 +8,7 @@ const SHORTCUTS: { keys: string; label: string }[] = [
   { keys: "↵", label: "Skip to next segment / track" },
   { keys: "⌘K", label: "Browse all tracks" },
   { keys: "?", label: "Show this help" },
-  { keys: "`", label: "默写 mode — toggle hide text (italic letters are hints)" },
+  { keys: "⌘B / `", label: "默写 mode — toggle hide text (progress preserved)" },
   { keys: "Type", label: "Start a session — the timer begins on first keystroke" },
 ];
 

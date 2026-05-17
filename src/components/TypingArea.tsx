@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import type { TypingEngine } from "../engine/typing";
 
 type Props = {
@@ -14,49 +14,6 @@ type Props = {
 
 /** Chars that stay visible in blind mode (spaces, punctuation, etc.). */
 const ALWAYS_VISIBLE = /[^A-Za-z0-9]/;
-
-/**
- * For blind mode: precompute which letter positions get revealed as hints.
- * Deterministic per (target, position) so the same word reveals the same
- * letters every time — no jarring shuffles on restart.
- *
- * Reveal rate:
- *   1–2 letter "words": no hints (too short to bother).
- *   3–5 letters:        1 hint.
- *   6+ letters:         2 hints.
- */
-function buildHintMask(target: string): boolean[] {
-  const mask = new Array(target.length).fill(false);
-  let wordStart = -1;
-  const flushWord = (end: number) => {
-    if (wordStart < 0) return;
-    const len = end - wordStart;
-    const n = len >= 6 ? 2 : len >= 3 ? 1 : 0;
-    if (n === 0) {
-      wordStart = -1;
-      return;
-    }
-    // 32-bit string hash
-    let h = 5381;
-    for (let i = wordStart; i < end; i++) {
-      h = ((h * 33) ^ target.charCodeAt(i)) | 0;
-    }
-    h = Math.abs(h);
-    const picked = new Set<number>();
-    for (let i = 0; i < n; i++) {
-      const offset = (h + i * 7) % len;
-      picked.add(offset);
-    }
-    for (const off of picked) mask[wordStart + off] = true;
-    wordStart = -1;
-  };
-  for (let i = 0; i <= target.length; i++) {
-    const isLetter = i < target.length && /[A-Za-z0-9]/.test(target[i]);
-    if (isLetter && wordStart < 0) wordStart = i;
-    else if (!isLetter && wordStart >= 0) flushWord(i);
-  }
-  return mask;
-}
 
 /**
  * Renders the target text as one <span> per character, with an absolutely
@@ -154,8 +111,18 @@ export function TypingArea({ engine, scroll = false, blind = false, onComplete }
     requestAnimationFrame(() => moveCursor(engine.cursor));
   }, [blind, engine]);
 
-  // Precompute the per-position hint mask whenever the target changes.
-  const hintMask = useMemo(() => buildHintMask(engine.target), [engine.target]);
+  /** Compute the visible glyph for one position given current engine state.
+   *  Used both during render and after each keystroke for imperative updates. */
+  const charDisplay = (flat: number): string => {
+    const ch = engine.target[flat];
+    if (ch === " ") return " ";
+    const status = engine.statuses[flat];
+    if (status === "correct") return ch;
+    if (status === "incorrect") return engine.typedChars[flat] ?? ch;
+    // untyped
+    if (blind && !ALWAYS_VISIBLE.test(ch)) return "_";
+    return ch;
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -164,13 +131,11 @@ export function TypingArea({ engine, scroll = false, blind = false, onComplete }
       if (e.key === "`") return;
 
       let changedIdx = -1;
-      let typedKey: string | null = null;
       if (e.key === "Backspace") {
         e.preventDefault();
         changedIdx = engine.backspace();
       } else if (e.key.length === 1) {
         e.preventDefault();
-        typedKey = e.key;
         changedIdx = engine.typeChar(e.key);
       } else {
         return;
@@ -180,23 +145,7 @@ export function TypingArea({ engine, scroll = false, blind = false, onComplete }
         const span = charsRef.current[changedIdx];
         if (span) {
           span.dataset.status = engine.statuses[changedIdx];
-          // In blind mode, render the position based on its new status:
-          //   correct   → reveal the target letter
-          //   incorrect → show what the user TYPED (not the target). This
-          //               respects "don't cover my input" — they need to
-          //               see their own typo to recognise it.
-          //   untyped   → re-hide unless it's a hint position
-          if (blind) {
-            const ch = engine.target[changedIdx];
-            const status = engine.statuses[changedIdx];
-            let display: string;
-            if (status === "correct") display = ch;
-            else if (status === "incorrect") display = typedKey ?? ch;
-            else
-              display =
-                ALWAYS_VISIBLE.test(ch) || hintMask[changedIdx] ? ch : "_";
-            span.textContent = display;
-          }
+          span.textContent = charDisplay(changedIdx);
         }
       }
       moveCursor(engine.cursor);
@@ -241,11 +190,14 @@ export function TypingArea({ engine, scroll = false, blind = false, onComplete }
     i = j;
   }
 
+  // renderChar reads the LIVE engine state, so re-renders (blind toggle,
+  // mode change, etc.) preserve every position's current status + typed
+  // character. Without this, the hardcoded "untyped" attribute would wipe
+  // imperative DOM updates and the user's progress would visually vanish.
   const renderChar = (flat: number, ch: string, isSpace: boolean) => {
+    const status = engine.statuses[flat] ?? "untyped";
     const isLetter = !isSpace && !ALWAYS_VISIBLE.test(ch);
-    const isHint = blind && isLetter && hintMask[flat];
-    const isMasked = blind && isLetter && !hintMask[flat];
-    const display = isSpace ? " " : isMasked ? "_" : ch;
+    const isMasked = blind && isLetter && status === "untyped";
     return (
       <span
         key={flat}
@@ -253,12 +205,11 @@ export function TypingArea({ engine, scroll = false, blind = false, onComplete }
           if (el) charsRef.current[flat] = el;
         }}
         className="dt-char"
-        data-status="untyped"
+        data-status={status}
         data-space={isSpace ? "1" : "0"}
         data-blind={isMasked ? "1" : "0"}
-        data-hint={isHint ? "1" : "0"}
       >
-        {display}
+        {charDisplay(flat)}
       </span>
     );
   };

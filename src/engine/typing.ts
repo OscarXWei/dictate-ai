@@ -41,6 +41,11 @@ export class TypingEngine {
   readonly target: string;
   readonly mode: TypingMode;
   readonly statuses: CharStatus[];
+  /** The actual character the user typed at each position (or null for
+   *  untyped). For correct positions this equals target[i]; for incorrect
+   *  it's whatever the user pressed. Used by the renderer so blind-mode
+   *  toggles and other re-renders never lose what the user pressed. */
+  readonly typedChars: (string | null)[];
 
   cursor = 0;
   totalKeystrokes = 0;
@@ -52,6 +57,7 @@ export class TypingEngine {
     this.target = normalizeTarget(target);
     this.mode = mode;
     this.statuses = new Array(this.target.length).fill("untyped");
+    this.typedChars = new Array(this.target.length).fill(null);
   }
 
   get isComplete(): boolean {
@@ -74,6 +80,7 @@ export class TypingEngine {
     if (correct) {
       this.correctKeystrokes++;
       this.statuses[idx] = "correct";
+      this.typedChars[idx] = ch;
       this.cursor++;
       if (this.cursor >= this.target.length) this.finishedAt = nowMs;
       return idx;
@@ -81,6 +88,7 @@ export class TypingEngine {
 
     // wrong char
     this.statuses[idx] = "incorrect";
+    this.typedChars[idx] = ch;
     if (this.mode === "lenient") {
       this.cursor++;
       if (this.cursor >= this.target.length) this.finishedAt = nowMs;
@@ -101,11 +109,13 @@ export class TypingEngine {
       this.statuses[this.cursor] === "incorrect"
     ) {
       this.statuses[this.cursor] = "untyped";
+      this.typedChars[this.cursor] = null;
       return this.cursor;
     }
     if (this.cursor === 0) return -1;
     this.cursor--;
     this.statuses[this.cursor] = "untyped";
+    this.typedChars[this.cursor] = null;
     return this.cursor;
   }
 
@@ -117,6 +127,7 @@ export class TypingEngine {
     this.finishedAt = null;
     for (let i = 0; i < this.statuses.length; i++) {
       this.statuses[i] = "untyped";
+      this.typedChars[i] = null;
     }
   }
 

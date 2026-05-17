@@ -139,7 +139,7 @@ export function Menu({
             </span>
             <span className="flex items-center gap-2">
               <kbd className="rounded border border-[var(--color-glass-border)] px-1.5 py-0.5 text-[10px] opacity-50">
-                `
+                ⌘B
               </kbd>
               <span
                 className={

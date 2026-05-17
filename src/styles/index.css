@@ -108,13 +108,6 @@ body::before {
 .dt-typing-area[data-blind="1"] .dt-char {
   letter-spacing: 0.35em;
 }
-/* Hint letters: shown italic + low contrast so the user knows they're a
-   crutch, not their own typed input. */
-.dt-char[data-hint="1"][data-status="untyped"] {
-  font-style: italic;
-  color: var(--color-cursor);
-  opacity: 0.55;
-}
 .dt-char[data-space="1"][data-status="incorrect"] {
   background-color: color-mix(in oklch, var(--color-text-error) 25%, transparent);
   text-decoration: none;

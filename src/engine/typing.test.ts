@@ -193,6 +193,32 @@ describe("TypingEngine — reset", () => {
   });
 });
 
+describe("TypingEngine — typedChars tracking", () => {
+  it("records what the user typed at each position", () => {
+    const e = new TypingEngine("ab", "lenient");
+    e.typeChar("a", 0);
+    e.typeChar("Z", 50);
+    expect(e.typedChars).toEqual(["a", "Z"]);
+    expect(e.statuses).toEqual(["correct", "incorrect"]);
+  });
+  it("clears typedChars on backspace", () => {
+    const e = new TypingEngine("abc");
+    e.typeChar("a", 0);
+    e.typeChar("b", 50);
+    e.backspace();
+    expect(e.typedChars).toEqual(["a", null, null]);
+    e.backspace();
+    expect(e.typedChars).toEqual([null, null, null]);
+  });
+  it("reset wipes typedChars", () => {
+    const e = new TypingEngine("ab");
+    e.typeChar("a", 0);
+    e.typeChar("X", 50);
+    e.reset();
+    expect(e.typedChars).toEqual([null, null]);
+  });
+});
+
 describe("TypingEngine — real IELTS sentence", () => {
   it("types a Whisper-produced sentence cleanly", () => {
     const sentence = "Are you the right person to talk to about the Buckworth Conservation Group?";
