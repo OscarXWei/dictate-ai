@@ -102,6 +102,13 @@ body::before {
   color: var(--color-text-dim);
   opacity: 0.4;
 }
+/* Hint letters (opt-in) — italic + cursor color so they're clearly crutches,
+   not regular text or the user's own typing. */
+.dt-char[data-hint="1"][data-status="untyped"] {
+  font-style: italic;
+  color: var(--color-cursor);
+  opacity: 0.6;
+}
 /* In blind mode, add air between every glyph so adjacent underscores
    visually separate (so the user can count letters). Applied uniformly
    whether masked or revealed so the layout never jumps as letters fill in. */

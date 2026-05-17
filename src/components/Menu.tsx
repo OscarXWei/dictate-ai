@@ -7,10 +7,12 @@ type Props = {
   dictationMode: DictationMode;
   rate: number;
   blind: boolean;
+  hints: boolean;
   onChangeMode: (m: TypingMode) => void;
   onChangeDictationMode: (d: DictationMode) => void;
   onChangeRate: (r: number) => void;
   onToggleBlind: () => void;
+  onToggleHints: () => void;
   onRestart: () => void;
   onNext: () => void;
   onReplay: () => void;
@@ -25,10 +27,12 @@ export function Menu({
   dictationMode,
   rate,
   blind,
+  hints,
   onChangeMode,
   onChangeDictationMode,
   onChangeRate,
   onToggleBlind,
+  onToggleHints,
   onRestart,
   onNext,
   onReplay,
@@ -134,7 +138,7 @@ export function Menu({
             <span className="flex flex-col">
               <span>默写 — hide text</span>
               <span className="text-[10px] opacity-50">
-                {blind ? "on · hints + reveal as you type" : "off · text fully visible"}
+                {blind ? "on · letters reveal as you type" : "off · text fully visible"}
               </span>
             </span>
             <span className="flex items-center gap-2">
@@ -149,6 +153,29 @@ export function Menu({
                 }
               />
             </span>
+          </button>
+          <button
+            onClick={onToggleHints}
+            disabled={!blind}
+            className="flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left hover:bg-[var(--color-glass-border)]/50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+          >
+            <span className="flex flex-col">
+              <span>Hints</span>
+              <span className="text-[10px] opacity-50">
+                {!blind
+                  ? "requires 默写 mode"
+                  : hints
+                    ? "on · 1–2 italic letters per word"
+                    : "off · all letters masked"}
+              </span>
+            </span>
+            <span
+              className={
+                blind && hints
+                  ? "h-1.5 w-1.5 rounded-full bg-[var(--color-cursor)] shadow-[0_0_6px_var(--color-cursor)]"
+                  : "h-1.5 w-1.5 rounded-full bg-[var(--color-glass-border)]"
+              }
+            />
           </button>
 
           <Separator />

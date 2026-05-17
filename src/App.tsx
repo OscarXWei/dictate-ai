@@ -38,6 +38,7 @@ function App() {
   );
   const [rate, setRate] = useState<number>(persisted.rate);
   const [blind, setBlind] = useState<boolean>(persisted.blind);
+  const [hints, setHints] = useState<boolean>(persisted.hints);
   const [restartNonce, setRestartNonce] = useState(0);
   const [segmentNonce, setSegmentNonce] = useState(0);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -92,8 +93,8 @@ function App() {
 
   // Persist position whenever it changes.
   useEffect(() => {
-    savePosition({ trackId, segmentIndex, mode, dictationMode, rate, blind });
-  }, [trackId, segmentIndex, mode, dictationMode, rate, blind]);
+    savePosition({ trackId, segmentIndex, mode, dictationMode, rate, blind, hints });
+  }, [trackId, segmentIndex, mode, dictationMode, rate, blind, hints]);
 
   const next = useCallback(() => {
     clearAutoAdvance();
@@ -213,6 +214,7 @@ function App() {
               engine={engine}
               scroll={dictationMode === "passage"}
               blind={blind}
+              hints={hints}
               onComplete={() => {
                 clearAutoAdvance();
                 autoAdvanceTimerRef.current = window.setTimeout(() => {
@@ -238,10 +240,12 @@ function App() {
             dictationMode={dictationMode}
             rate={rate}
             blind={blind}
+            hints={hints}
             onChangeMode={setMode}
             onChangeDictationMode={setDictationMode}
             onChangeRate={setRate}
             onToggleBlind={() => setBlind((b) => !b)}
+            onToggleHints={() => setHints((h) => !h)}
             onRestart={restart}
             onNext={next}
             onReplay={replayAudio}

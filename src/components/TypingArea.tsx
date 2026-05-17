@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { TypingEngine } from "../engine/typing";
 
 type Props = {
@@ -9,11 +9,49 @@ type Props = {
   /** 默写模式 — hide letters & digits behind underscores until typed
    *  correctly. Spaces and punctuation stay visible as a skeleton. */
   blind?: boolean;
+  /** Opt-in hint reveals — when blind AND hints are on, 1–2 letters per word
+   *  show through as italic crutches. Default off. */
+  hints?: boolean;
   onComplete?: () => void;
 };
 
 /** Chars that stay visible in blind mode (spaces, punctuation, etc.). */
 const ALWAYS_VISIBLE = /[^A-Za-z0-9]/;
+
+/**
+ * Deterministic per-position hint mask. 1 hint for 3–5 letter words,
+ * 2 hints for 6+. Returns all-false when hints are off so the call site
+ * doesn't have to branch.
+ */
+function buildHintMask(target: string, enabled: boolean): boolean[] {
+  const mask = new Array(target.length).fill(false);
+  if (!enabled) return mask;
+  let wordStart = -1;
+  const flushWord = (end: number) => {
+    if (wordStart < 0) return;
+    const len = end - wordStart;
+    const n = len >= 6 ? 2 : len >= 3 ? 1 : 0;
+    if (n === 0) {
+      wordStart = -1;
+      return;
+    }
+    let h = 5381;
+    for (let i = wordStart; i < end; i++) {
+      h = ((h * 33) ^ target.charCodeAt(i)) | 0;
+    }
+    h = Math.abs(h);
+    const picked = new Set<number>();
+    for (let i = 0; i < n; i++) picked.add((h + i * 7) % len);
+    for (const off of picked) mask[wordStart + off] = true;
+    wordStart = -1;
+  };
+  for (let i = 0; i <= target.length; i++) {
+    const isLetter = i < target.length && /[A-Za-z0-9]/.test(target[i]);
+    if (isLetter && wordStart < 0) wordStart = i;
+    else if (!isLetter && wordStart >= 0) flushWord(i);
+  }
+  return mask;
+}
 
 /**
  * Renders the target text as one <span> per character, with an absolutely
@@ -22,7 +60,13 @@ const ALWAYS_VISIBLE = /[^A-Za-z0-9]/;
  * Updates happen via imperative DOM writes keyed on the index returned by the
  * engine — React doesn't re-render on keystrokes.
  */
-export function TypingArea({ engine, scroll = false, blind = false, onComplete }: Props) {
+export function TypingArea({
+  engine,
+  scroll = false,
+  blind = false,
+  hints = false,
+  onComplete,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cursorRef = useRef<HTMLSpanElement>(null);
   const charsRef = useRef<HTMLSpanElement[]>([]);
@@ -111,6 +155,12 @@ export function TypingArea({ engine, scroll = false, blind = false, onComplete }
     requestAnimationFrame(() => moveCursor(engine.cursor));
   }, [blind, engine]);
 
+  // Hint mask: per-target, only built when both blind AND hints are on.
+  const hintMask = useMemo(
+    () => buildHintMask(engine.target, blind && hints),
+    [engine.target, blind, hints],
+  );
+
   /** Compute the visible glyph for one position given current engine state.
    *  Used both during render and after each keystroke for imperative updates. */
   const charDisplay = (flat: number): string => {
@@ -120,7 +170,9 @@ export function TypingArea({ engine, scroll = false, blind = false, onComplete }
     if (status === "correct") return ch;
     if (status === "incorrect") return engine.typedChars[flat] ?? ch;
     // untyped
-    if (blind && !ALWAYS_VISIBLE.test(ch)) return "_";
+    if (blind && !ALWAYS_VISIBLE.test(ch)) {
+      return hintMask[flat] ? ch : "_";
+    }
     return ch;
   };
 
@@ -197,7 +249,8 @@ export function TypingArea({ engine, scroll = false, blind = false, onComplete }
   const renderChar = (flat: number, ch: string, isSpace: boolean) => {
     const status = engine.statuses[flat] ?? "untyped";
     const isLetter = !isSpace && !ALWAYS_VISIBLE.test(ch);
-    const isMasked = blind && isLetter && status === "untyped";
+    const isHint = blind && hints && isLetter && hintMask[flat] && status === "untyped";
+    const isMasked = blind && isLetter && status === "untyped" && !isHint;
     return (
       <span
         key={flat}
@@ -208,6 +261,7 @@ export function TypingArea({ engine, scroll = false, blind = false, onComplete }
         data-status={status}
         data-space={isSpace ? "1" : "0"}
         data-blind={isMasked ? "1" : "0"}
+        data-hint={isHint ? "1" : "0"}
       >
         {charDisplay(flat)}
       </span>
