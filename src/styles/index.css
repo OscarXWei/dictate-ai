@@ -92,10 +92,17 @@ body::before {
   text-decoration-color: var(--color-text-error);
   text-decoration-thickness: 1.5px;
 }
-/* 默写模式 — letters render as soft underscores until typed */
+/* 默写模式 — masked letters render as soft underscores until typed */
 .dt-char[data-blind="1"][data-status="untyped"] {
   color: var(--color-text-dim);
   opacity: 0.4;
+}
+/* Hint letters: shown italic + low contrast so the user knows they're a
+   crutch, not their own typed input. */
+.dt-char[data-hint="1"][data-status="untyped"] {
+  font-style: italic;
+  color: var(--color-cursor);
+  opacity: 0.55;
 }
 .dt-char[data-space="1"][data-status="incorrect"] {
   background-color: color-mix(in oklch, var(--color-text-error) 25%, transparent);

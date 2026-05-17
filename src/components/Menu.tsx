@@ -127,12 +127,29 @@ export function Menu({
 
           <Separator />
           <SectionLabel>Practice</SectionLabel>
-          <ModeRow
-            active={blind}
-            label="默写 — hide text"
-            description="letters revealed as you type"
+          <button
             onClick={onToggleBlind}
-          />
+            className="flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left hover:bg-[var(--color-glass-border)]/50"
+          >
+            <span className="flex flex-col">
+              <span>默写 — hide text</span>
+              <span className="text-[10px] opacity-50">
+                {blind ? "on · hints + reveal as you type" : "off · text fully visible"}
+              </span>
+            </span>
+            <span className="flex items-center gap-2">
+              <kbd className="rounded border border-[var(--color-glass-border)] px-1.5 py-0.5 text-[10px] opacity-50">
+                `
+              </kbd>
+              <span
+                className={
+                  blind
+                    ? "h-1.5 w-1.5 rounded-full bg-[var(--color-cursor)] shadow-[0_0_6px_var(--color-cursor)]"
+                    : "h-1.5 w-1.5 rounded-full bg-[var(--color-glass-border)]"
+                }
+              />
+            </span>
+          </button>
 
           <Separator />
           <MenuItem

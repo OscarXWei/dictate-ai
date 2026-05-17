@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { TypingEngine } from "../engine/typing";
 
 type Props = {
@@ -14,6 +14,49 @@ type Props = {
 
 /** Chars that stay visible in blind mode (spaces, punctuation, etc.). */
 const ALWAYS_VISIBLE = /[^A-Za-z0-9]/;
+
+/**
+ * For blind mode: precompute which letter positions get revealed as hints.
+ * Deterministic per (target, position) so the same word reveals the same
+ * letters every time — no jarring shuffles on restart.
+ *
+ * Reveal rate:
+ *   1–2 letter "words": no hints (too short to bother).
+ *   3–5 letters:        1 hint.
+ *   6+ letters:         2 hints.
+ */
+function buildHintMask(target: string): boolean[] {
+  const mask = new Array(target.length).fill(false);
+  let wordStart = -1;
+  const flushWord = (end: number) => {
+    if (wordStart < 0) return;
+    const len = end - wordStart;
+    const n = len >= 6 ? 2 : len >= 3 ? 1 : 0;
+    if (n === 0) {
+      wordStart = -1;
+      return;
+    }
+    // 32-bit string hash
+    let h = 5381;
+    for (let i = wordStart; i < end; i++) {
+      h = ((h * 33) ^ target.charCodeAt(i)) | 0;
+    }
+    h = Math.abs(h);
+    const picked = new Set<number>();
+    for (let i = 0; i < n; i++) {
+      const offset = (h + i * 7) % len;
+      picked.add(offset);
+    }
+    for (const off of picked) mask[wordStart + off] = true;
+    wordStart = -1;
+  };
+  for (let i = 0; i <= target.length; i++) {
+    const isLetter = i < target.length && /[A-Za-z0-9]/.test(target[i]);
+    if (isLetter && wordStart < 0) wordStart = i;
+    else if (!isLetter && wordStart >= 0) flushWord(i);
+  }
+  return mask;
+}
 
 /**
  * Renders the target text as one <span> per character, with an absolutely
@@ -92,9 +135,14 @@ export function TypingArea({ engine, scroll = false, blind = false, onComplete }
     return () => ro.disconnect();
   }, [engine]);
 
+  // Precompute the per-position hint mask whenever the target changes.
+  const hintMask = useMemo(() => buildHintMask(engine.target), [engine.target]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // Backtick is reserved as the global blind-mode toggle — App owns it.
+      if (e.key === "`") return;
 
       let changedIdx = -1;
       if (e.key === "Backspace") {
@@ -112,12 +160,12 @@ export function TypingArea({ engine, scroll = false, blind = false, onComplete }
         if (span) {
           span.dataset.status = engine.statuses[changedIdx];
           // In blind mode, reveal the true character on correct input;
-          // hide it again on backspace (status === "untyped").
+          // hide it again on backspace, unless it's a hint position.
           if (blind) {
             const ch = engine.target[changedIdx];
+            const typed = engine.statuses[changedIdx] !== "untyped";
             const visible =
-              engine.statuses[changedIdx] !== "untyped" ||
-              ALWAYS_VISIBLE.test(ch);
+              typed || ALWAYS_VISIBLE.test(ch) || hintMask[changedIdx];
             span.textContent = visible ? ch : "_";
           }
         }
@@ -162,11 +210,10 @@ export function TypingArea({ engine, scroll = false, blind = false, onComplete }
   }
 
   const renderChar = (flat: number, ch: string, isSpace: boolean) => {
-    const display = isSpace
-      ? " "
-      : blind && !ALWAYS_VISIBLE.test(ch)
-        ? "_"
-        : ch;
+    const isLetter = !isSpace && !ALWAYS_VISIBLE.test(ch);
+    const isHint = blind && isLetter && hintMask[flat];
+    const isMasked = blind && isLetter && !hintMask[flat];
+    const display = isSpace ? " " : isMasked ? "_" : ch;
     return (
       <span
         key={flat}
@@ -176,7 +223,8 @@ export function TypingArea({ engine, scroll = false, blind = false, onComplete }
         className="dt-char"
         data-status="untyped"
         data-space={isSpace ? "1" : "0"}
-        data-blind={blind && !isSpace && !ALWAYS_VISIBLE.test(ch) ? "1" : "0"}
+        data-blind={isMasked ? "1" : "0"}
+        data-hint={isHint ? "1" : "0"}
       >
         {display}
       </span>

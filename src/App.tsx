@@ -148,6 +148,11 @@ function App() {
         setHelpOpen(true);
         return;
       }
+      if (e.key === "`") {
+        e.preventDefault();
+        setBlind((b) => !b);
+        return;
+      }
       if (e.key === "Tab") {
         e.preventDefault();
         replayAudio();
