@@ -73,6 +73,10 @@ export function TypingArea({ engine, scroll = false, blind = false, onComplete }
   const typingTimeoutRef = useRef<number | null>(null);
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
+  /** Latches once per engine so onComplete fires exactly once even if more
+   *  keystrokes arrive after the last char is typed. Without this, extra
+   *  keys queue additional setTimeouts → advances skip past segments. */
+  const completeFiredRef = useRef(false);
 
   // Reset the char-span array on engine change, BEFORE the ref callbacks below
   // run during this render — otherwise stale spans from a previous longer
@@ -126,7 +130,16 @@ export function TypingArea({ engine, scroll = false, blind = false, onComplete }
   };
 
   useEffect(() => {
-    requestAnimationFrame(() => moveCursor(0));
+    completeFiredRef.current = false;
+    const cursor = cursorRef.current;
+    if (cursor) cursor.dataset.snap = "1";
+    requestAnimationFrame(() => {
+      moveCursor(0);
+      // Re-enable the gliding transition on the very next frame.
+      requestAnimationFrame(() => {
+        if (cursor) cursor.dataset.snap = "0";
+      });
+    });
   }, [engine]);
 
   useEffect(() => {
@@ -134,6 +147,12 @@ export function TypingArea({ engine, scroll = false, blind = false, onComplete }
     if (containerRef.current) ro.observe(containerRef.current);
     return () => ro.disconnect();
   }, [engine]);
+
+  // Blind toggle shifts every char's x-position (letter-spacing kicks in /
+  // out), but doesn't fire a keystroke — re-measure the cursor.
+  useEffect(() => {
+    requestAnimationFrame(() => moveCursor(engine.cursor));
+  }, [blind, engine]);
 
   // Precompute the per-position hint mask whenever the target changes.
   const hintMask = useMemo(() => buildHintMask(engine.target), [engine.target]);
@@ -145,11 +164,13 @@ export function TypingArea({ engine, scroll = false, blind = false, onComplete }
       if (e.key === "`") return;
 
       let changedIdx = -1;
+      let typedKey: string | null = null;
       if (e.key === "Backspace") {
         e.preventDefault();
         changedIdx = engine.backspace();
       } else if (e.key.length === 1) {
         e.preventDefault();
+        typedKey = e.key;
         changedIdx = engine.typeChar(e.key);
       } else {
         return;
@@ -159,14 +180,22 @@ export function TypingArea({ engine, scroll = false, blind = false, onComplete }
         const span = charsRef.current[changedIdx];
         if (span) {
           span.dataset.status = engine.statuses[changedIdx];
-          // In blind mode, reveal the true character on correct input;
-          // hide it again on backspace, unless it's a hint position.
+          // In blind mode, render the position based on its new status:
+          //   correct   → reveal the target letter
+          //   incorrect → show what the user TYPED (not the target). This
+          //               respects "don't cover my input" — they need to
+          //               see their own typo to recognise it.
+          //   untyped   → re-hide unless it's a hint position
           if (blind) {
             const ch = engine.target[changedIdx];
-            const typed = engine.statuses[changedIdx] !== "untyped";
-            const visible =
-              typed || ALWAYS_VISIBLE.test(ch) || hintMask[changedIdx];
-            span.textContent = visible ? ch : "_";
+            const status = engine.statuses[changedIdx];
+            let display: string;
+            if (status === "correct") display = ch;
+            else if (status === "incorrect") display = typedKey ?? ch;
+            else
+              display =
+                ALWAYS_VISIBLE.test(ch) || hintMask[changedIdx] ? ch : "_";
+            span.textContent = display;
           }
         }
       }
@@ -183,7 +212,10 @@ export function TypingArea({ engine, scroll = false, blind = false, onComplete }
         }, 250);
       }
 
-      if (engine.isComplete) onCompleteRef.current?.();
+      if (engine.isComplete && !completeFiredRef.current) {
+        completeFiredRef.current = true;
+        onCompleteRef.current?.();
+      }
     };
 
     window.addEventListener("keydown", onKey);
@@ -234,8 +266,9 @@ export function TypingArea({ engine, scroll = false, blind = false, onComplete }
   return (
     <div
       ref={containerRef}
+      data-blind={blind ? "1" : "0"}
       className={
-        "relative font-mono leading-[1.55] tracking-tight text-[var(--color-text-dim)]" +
+        "dt-typing-area relative font-mono leading-[1.55] tracking-tight text-[var(--color-text-dim)]" +
         (scroll
           ? " max-h-[60vh] overflow-y-auto pr-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           : "")

@@ -78,10 +78,15 @@ body::before {
   );
 }
 
-/* TypingArea — character spans */
+/* TypingArea — character spans.
+   Smooth ink-in: a slightly longer fade than gut feel gives a "settling"
+   quality without lagging behind keystrokes. */
 .dt-char {
   color: var(--color-text-dim);
-  transition: color 80ms ease-out;
+  transition:
+    color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .dt-char[data-status="correct"] {
   color: var(--color-text-correct);
@@ -97,6 +102,12 @@ body::before {
   color: var(--color-text-dim);
   opacity: 0.4;
 }
+/* In blind mode, add air between every glyph so adjacent underscores
+   visually separate (so the user can count letters). Applied uniformly
+   whether masked or revealed so the layout never jumps as letters fill in. */
+.dt-typing-area[data-blind="1"] .dt-char {
+  letter-spacing: 0.35em;
+}
 /* Hint letters: shown italic + low contrast so the user knows they're a
    crutch, not their own typed input. */
 .dt-char[data-hint="1"][data-status="untyped"] {
@@ -110,7 +121,8 @@ body::before {
   border-radius: 2px;
 }
 
-/* Cursor — absolutely positioned, glides smoothly */
+/* Cursor — absolutely positioned, glides smoothly.
+   easeOutQuint + GPU promotion = buttery settle, no lag. */
 .dt-cursor {
   position: absolute;
   top: 0;
@@ -119,13 +131,20 @@ body::before {
   background: var(--color-cursor);
   border-radius: 2px;
   pointer-events: none;
+  will-change: transform, height;
+  transform: translateZ(0);
   transition:
-    transform 90ms cubic-bezier(0.4, 0, 0.2, 1),
-    height 90ms cubic-bezier(0.4, 0, 0.2, 1);
+    transform 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 140ms cubic-bezier(0.22, 1, 0.36, 1);
   box-shadow:
     0 0 6px var(--color-cursor),
     0 0 14px color-mix(in oklch, var(--color-cursor) 50%, transparent);
   animation: dt-cursor-pulse 1.4s ease-in-out infinite;
+}
+/* Snap immediately to a new position (e.g. on segment swap) instead of
+   sliding across the screen. */
+.dt-cursor[data-snap="1"] {
+  transition: none;
 }
 @keyframes dt-cursor-pulse {
   0%, 100% { opacity: 1; }

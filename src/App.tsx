@@ -43,6 +43,17 @@ function App() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
+  // Single source of truth for the auto-advance timer. Cancelled whenever
+  // next() or restart() fire from any path (Enter shortcut, menu, etc.) —
+  // without this, manual advances race the timer and flash a sentence.
+  const autoAdvanceTimerRef = useRef<number | null>(null);
+  const clearAutoAdvance = useCallback(() => {
+    if (autoAdvanceTimerRef.current !== null) {
+      window.clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
+    }
+  }, []);
+
   const track = useMemo(
     () => tracks.find((t) => t.id === trackId) ?? tracks[0],
     [trackId],
@@ -85,6 +96,7 @@ function App() {
   }, [trackId, segmentIndex, mode, dictationMode, rate, blind]);
 
   const next = useCallback(() => {
+    clearAutoAdvance();
     stop();
     if (dictationMode === "passage") {
       // Advance to next track in the manifest order.
@@ -95,16 +107,20 @@ function App() {
       return;
     }
     setSegmentIndex((i) => Math.min(i + 1, track.segments.length - 1));
-  }, [stop, dictationMode, trackId, track.segments.length]);
+  }, [clearAutoAdvance, stop, dictationMode, trackId, track.segments.length]);
 
   const restart = useCallback(() => {
+    clearAutoAdvance();
     stop();
     if (dictationMode === "passage") {
       // Restart entire passage.
       setSegmentIndex(0);
     }
     setRestartNonce((n) => n + 1);
-  }, [stop, dictationMode]);
+  }, [clearAutoAdvance, stop, dictationMode]);
+
+  // Clean up any pending advance on unmount.
+  useEffect(() => () => clearAutoAdvance(), [clearAutoAdvance]);
 
   const replayAudio = useCallback(() => {
     replay();
@@ -185,7 +201,13 @@ function App() {
               engine={engine}
               scroll={dictationMode === "passage"}
               blind={blind}
-              onComplete={() => window.setTimeout(next, 700)}
+              onComplete={() => {
+                clearAutoAdvance();
+                autoAdvanceTimerRef.current = window.setTimeout(() => {
+                  autoAdvanceTimerRef.current = null;
+                  next();
+                }, 700);
+              }}
             />
           </div>
           <AudioProgress

@@ -15,6 +15,7 @@ type PlayOptions = {
 export function useAudioPlayer(src: string | null, rate: number = 1) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const stopTimerRef = useRef<number | null>(null);
+  const stopWatcherRef = useRef<(() => void) | null>(null);
   const pendingReadyRef = useRef<(() => void) | null>(null);
   const lastSegmentRef = useRef<{ start: number; end: number } | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -46,6 +47,10 @@ export function useAudioPlayer(src: string | null, rate: number = 1) {
     if (stopTimerRef.current !== null) {
       window.clearTimeout(stopTimerRef.current);
       stopTimerRef.current = null;
+    }
+    if (stopWatcherRef.current) {
+      stopWatcherRef.current();
+      stopWatcherRef.current = null;
     }
   };
 
@@ -93,11 +98,14 @@ export function useAudioPlayer(src: string | null, rate: number = 1) {
       if (!el || !src) return;
 
       const leadIn = opts.leadInSec ?? 0;
-      const tail = opts.tailSec ?? 0.15;
+      // Tiny tail (30 ms) prevents clipped consonants without bleeding
+      // audibly into the next segment.
+      const tail = opts.tailSec ?? 0.03;
       const from = Math.max(0, startSec - leadIn);
-      // Slower playback ⇒ longer wall-clock time before auto-stop.
-      const playDurationMs =
-        (Math.max(0, endSec - from + tail) / Math.max(0.1, rate)) * 1000;
+      const stopAt = endSec + tail;
+      // Fallback wall-clock timeout (generous) in case timeupdate stalls.
+      const fallbackMs =
+        (Math.max(0, stopAt - from) / Math.max(0.1, rate)) * 1000 + 300;
 
       clearStopTimer();
       clearPendingReady();
@@ -106,10 +114,24 @@ export function useAudioPlayer(src: string | null, rate: number = 1) {
       const begin = () => {
         el.currentTime = from;
         void el.play();
+        // Primary: audio-clock driven. Fires within ~50 ms of crossing
+        // stopAt — much tighter than setTimeout drift through long segments.
+        const onTimeUpdate = () => {
+          if (el.currentTime >= stopAt) {
+            el.pause();
+            clearStopTimer();
+          }
+        };
+        el.addEventListener("timeupdate", onTimeUpdate);
+        stopWatcherRef.current = () => {
+          el.removeEventListener("timeupdate", onTimeUpdate);
+        };
+        // Belt-and-braces: if timeupdate stops firing (browser quirk),
+        // setTimeout still cuts playback.
         stopTimerRef.current = window.setTimeout(() => {
           el.pause();
-          stopTimerRef.current = null;
-        }, playDurationMs);
+          clearStopTimer();
+        }, fallbackMs);
       };
 
       if (el.readyState >= 2) {
